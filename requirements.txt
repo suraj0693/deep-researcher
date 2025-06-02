@@ -1,0 +1,7 @@
+smolagents
+crawl4ai
+tavily-python
+litellm
+mlx
+huggingface-hub
+huggingface
