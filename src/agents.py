@@ -45,6 +45,7 @@ class DeepResearcher:
         report = self.reporter_agent.get_key_points_and_executive_summary(query)
         for step_result in self.memory.step:
             report = report + "\n\n"+ self.reporter_agent.generate_step_report(report, step_result)
+        report = report + "\n\n" + self.reporter_agent.get_conclusion(report, query)
         yield report
 
 
@@ -96,8 +97,8 @@ class Reporter:
         key_points_and_executive_summary = self.llm.run(prompt)
         return key_points_and_executive_summary
 
-    def get_conclusion(self):
-        prompt = conclusion_prompt + self.step_results
+    def get_conclusion(self, report, query):
+        prompt = conclusion_prompt.format(report = report, task=query)
         conclusion = self.llm.run(prompt)
         return conclusion
 

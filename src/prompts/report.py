@@ -33,5 +33,13 @@ content for current section :
 Begin!
 """
 
-conclusion_prompt= """
+conclusion_prompt= """We are working on generating a research report for a given research topic. The main content of the report is already written based on facts/knowledge discovered during research process.
+You taks is to write a concise conclusion. You are given here the already written report content for you to correctly write conclusion.
+
+Research task : {task}
+Report content : {report}
+
+Your output should be in Markdown format.
+
+Begin!
 """
