@@ -4,5 +4,10 @@ from typing import List, Dict
 
 @dataclass
 class Memory:
-    step: List[str] = None
+    step: List[Dict] = None
     plan: List[Dict] = None
+
+
+@dataclass
+class StepMemory:
+    pass

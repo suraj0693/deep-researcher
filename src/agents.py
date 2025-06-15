@@ -1,6 +1,7 @@
 from smolagents import CodeAgent
 from smolagents.default_tools import DuckDuckGoSearchTool
 import json
+from concurrent.futures import ThreadPoolExecutor
 
 from src.tools.crawler import Crawler
 from src.tools.web_search import WebSearch
@@ -8,6 +9,8 @@ from smolagents.models import LiteLLMModel
 from src.models import QueryPlanResponse
 from src.prompts.query_planner import query_planner_prompt
 from src.memory import Memory
+from src.llm import LLM
+from src.prompts.report import key_points_and_executive_summary_prompt, step_report_prompt, conclusion_prompt
 
 
 class DeepResearcher:
@@ -24,14 +27,25 @@ class DeepResearcher:
                                ),
             tools=[DuckDuckGoSearchTool()],
         )
+        self.reporter_agent = Reporter(self.memory)
 
     def run(self, query: str):
         plans = self.planner_agent.run(query=query)
         self.memory.plan = plans['queries']
         yield self.memory.plan
-        for sub_query in self.memory.plan:
-            step_result = self.team_agent.run(task=sub_query['sub_query'])
-            self.memory.step.append(step_result)
+        # make concurrent calls to team agent for each query and wait for all the results
+        def run_query_concurrently(sub_query):
+            return self.team_agent.run(task=sub_query['sub_query'])
+
+        with ThreadPoolExecutor() as executor:
+            futures = [executor.submit(run_query_concurrently, sub_query) for sub_query in self.memory.plan]
+            results = [future.result() for future in futures]
+            for result, sub_query in zip(results, self.memory.plan):
+                self.memory.step.append({sub_query: result})
+        report = self.reporter_agent.get_key_points_and_executive_summary(query)
+        for step_result in self.memory.step:
+            report = report + "\n\n"+ self.reporter_agent.generate_step_report(report, step_result)
+        yield report
 
 
 class QueryPlanner:
@@ -62,16 +76,30 @@ class QueryPlanner:
         print(sub_queries)
         return plans
 
+
 class Reporter:
 
-    def __init__(self, step_results):
-        self.step_results = step_results
+    def __init__(self, memory=None):
+        self.llm = LLM(model_id="openai/qwen/qwen3-4b",
+                       api_base="http://192.168.0.105:1234/v1/",
+                       api_key="fake_key",
+                       )
+        self.memory: Memory = memory
 
-    def generate_report(self):
-        pass
+    def generate_step_report(self, partial_report, step_result):
+        prompt = step_report_prompt.format(previously_generated=partial_report, step_content=str(step_result)) + step_result
+        step_report = self.llm.run(prompt)
+        return step_report
 
-    def get_summary(self):
-        pass
+    def get_key_points_and_executive_summary(self, query):
+        prompt = key_points_and_executive_summary_prompt.format(query=query, research_results=str(self.memory.step)) 
+        key_points_and_executive_summary = self.llm.run(prompt)
+        return key_points_and_executive_summary
+
+    def get_conclusion(self):
+        prompt = conclusion_prompt + self.step_results
+        conclusion = self.llm.run(prompt)
+        return conclusion
 
 
 if __name__ == "__main__":
